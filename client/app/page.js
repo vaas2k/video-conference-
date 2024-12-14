@@ -3,9 +3,12 @@ import useWebSocket from "@/store/useWebSocket";
 import React, { useEffect, useRef, useState } from "react";
 import mediasoup, { Device } from 'mediasoup-client';
 import axios from "axios";
-import { isNotFoundError } from "next/dist/client/components/not-found";
 
+const serverUrl = process.env.NEXT_PUBLIC_SERVER_URL;
 
+const api = axios.create({
+  baseURL: serverUrl
+});
 
 export default function Home() {
 
@@ -144,7 +147,7 @@ export default function Home() {
 
               console.log(parameters);
 
-              const res = await axios.post('http://localhost:8000/transport-produce', {
+              const res = await api.post('/transport-produce', {
                 rtpParameters: parameters.rtpParameters,
                 kind: parameters.kind,
                 appData: parameters.appData,
@@ -277,7 +280,7 @@ export default function Home() {
     try {
       if (rtpCapabilities.current || deviceRef.current) return;
 
-      const req = await axios.get('http://localhost:8000/rtpCapabilities');
+      const req = await api.get('/rtpCapabilities');
 
       if (req.status === 200) {
 
@@ -316,7 +319,7 @@ export default function Home() {
   
   // VIDEO TRANSPORT
   async function createTransport(send, recv) {
-    const req = await axios.post('http://localhost:8000/transport-create', {
+    const req = await api.post('/transport-create', {
       send,
       recv
     });
@@ -355,7 +358,7 @@ export default function Home() {
 
             console.log(parameters);
 
-            const res = await axios.post('http://localhost:8000/transport-produce', {
+            const res = await api.post('/transport-produce', {
               rtpParameters: parameters.rtpParameters,
               kind: parameters.kind,
               appData: parameters.appData,
@@ -450,7 +453,7 @@ export default function Home() {
   async function connectRecvTransport() {
     try {
       console.log('CALLED');
-      const res = await axios.post('http://localhost:8000/transport-consume', {
+      const res = await api.post('/transport-consume', {
         rtpCapabilities: deviceRef.current.rtpCapabilities,
         name: nameRef.current
       });
@@ -495,7 +498,7 @@ export default function Home() {
 
   // AUDIO TRANSPORT
   async function createAudioTransport(send, recv) {
-    const req = await axios.post('http://localhost:8000/transport-create-audio', {
+    const req = await api.post('/transport-create-audio', {
       send,
       recv
     });
@@ -534,7 +537,7 @@ export default function Home() {
 
             console.log(parameters);
 
-            const res = await axios.post('http://localhost:8000/transport-produce-audio', {
+            const res = await api.post('/transport-produce-audio', {
               rtpParameters: parameters.rtpParameters,
               kind: parameters.kind,
               appData: parameters.appData,
@@ -615,7 +618,7 @@ export default function Home() {
   async function connectAudioRecvTransport() {
     setAudioRemoteStreams([]);
     try {
-      const res = await axios.post('http://localhost:8000/transport-consume-audio', {
+      const res = await api.post('/transport-consume-audio', {
         rtpCapabilities: deviceRef.current.rtpCapabilities,
         name: nameRef.current
       });
@@ -666,7 +669,7 @@ export default function Home() {
    // DATA CHANNEL TRANSPORT 
    async function createDataTransport(send, recv) {
     try {
-      const res = await axios.post('http://localhost:8000/create-data-transport', {
+      const res = await api.post('/create-data-transport', {
         send,
         recv
       });
@@ -699,7 +702,7 @@ export default function Home() {
           dataProducerTransport.current.on('producedata', async (parameters, callback, errback) => {
             console.log(parameters);
             try {
-              const res = await axios.post('http://localhost:8000/data-produce', {
+              const res = await api.post('/data-produce', {
                 sctpStreamParameters: parameters.sctpStreamParameters,
                 appData: parameters.appData,
                 label: parameters.label,
@@ -764,7 +767,7 @@ export default function Home() {
   async function connectDataConsumeTransport() {
     try {
 
-      const res = await axios.post('http://localhost:8000/data-consume', {
+      const res = await api.post('/data-consume', {
         name: nameRef.current
       });
 
