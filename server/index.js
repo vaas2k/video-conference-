@@ -36,6 +36,7 @@ app.get('/', (req, res) => res.send('Hello Nigga'));
 let tranportCounts = 0;
 let rtcMinPort = 2000;
 let rtcMaxPort = 2020;
+let announcedIp = '127.0.0.1';
 
 const users = [];
 let worker, router;
@@ -536,10 +537,10 @@ wss.on('request', (req) => {
 
             if (event === 'name') {
 
-                if(tranportCounts >= rtcMaxPort - rtcMinPort - 1) {
-                    console.log('UDP TRANSPORT PORTS -> ',tranportCounts)
+                if (tranportCounts >= rtcMaxPort - rtcMinPort - 1) {
+                    console.log('UDP TRANSPORT PORTS -> ', tranportCounts)
                     socket.send(JSON.stringify({
-                        event : 'max-users'
+                        event: 'max-users'
                     }));
                     return;
                 }
@@ -718,21 +719,43 @@ wss.on('request', (req) => {
     socket.on('close', () => {
         console.log('USER DISCONNECTED');
         const userIndex = users.findIndex(user => user.socket == socket);
+
         if (userIndex > -1 && users[userIndex].roomID) {
-            for (const room of videoRooms.get(users[userIndex].roomID)) {
-                if (users[userIndex].name === room.name) continue;
-                room.socket.send(JSON.stringify({
-                    event: "USER-LEFT-ROOM"
-                }))
+            const roomID = users[userIndex].roomID;
+            const roomParticipants = videoRooms.get(roomID);
+
+            if (roomParticipants) {
+                for (const room of roomParticipants) {
+                    if (users[userIndex].name === room.name) continue;
+                    room.socket.send(
+                        JSON.stringify({
+                            event: "USER-LEFT-ROOM",
+                            data: { name: users[userIndex].name }
+                        })
+                    );
+                }
+
+                const updatedParticipants = roomParticipants.filter(
+                    (participant) => participant.name !== users[userIndex].name
+                );
+
+                if (updatedParticipants.length > 0) {
+                    videoRooms.set(roomID, updatedParticipants);
+                } else {
+                    videoRooms.delete(roomID);
+                }
+
+                users[userIndex].roomID = null;
             }
         }
+
 
         if (userIndex > -1 && producers.get(users[userIndex].name)) {
             const prod = producers.get(users[userIndex].name);
             prod.close();
             producers.delete(users[userIndex].name);
             console.log(`NAME : ${users[userIndex].name.toUpperCase()} VIDEO PRODUCER DELETED`);
-            
+
         }
         if (userIndex > -1 && consumers.get(users[userIndex].name)) {
             for (const cons of consumers.get(users[userIndex].name)) { cons.consumer.close(); }
@@ -740,7 +763,7 @@ wss.on('request', (req) => {
 
             consumers.delete(users[userIndex].name);
             console.log(`NAME : ${users[userIndex].name.toUpperCase()} VIDEO CONSUMER DELETED`);
-            
+
         }
 
         if (userIndex > -1 && audioProducers.get(users[userIndex].name)) {
@@ -748,24 +771,24 @@ wss.on('request', (req) => {
             audioProd.close();
             audioProducers.delete(users[userIndex].name);
             console.log(`NAME : ${users[userIndex].name.toUpperCase()} AUDIO PRODUCER DELETED`);
-            
+
         }
         if (userIndex > -1 && audioConsumers.get(users[userIndex].name)) {
             for (const cons of audioConsumers.get(users[userIndex].name)) { cons.audio_consumer.close(); }
             audioConsumersTransports.get(users[userIndex].name).close();
             audioConsumers.delete(users[userIndex].name);
             console.log(`NAME : ${users[userIndex].name.toUpperCase()} AUDIO CONSUMER DELETED`);
-            
+
         }
         if (userIndex > -1 && dataProducers.get(users[userIndex].name)) {
             dataProducers.delete(users[userIndex].name);
             console.log(`NAME : ${users[userIndex].name.toUpperCase()} DATA PRODUCER DELETED`);
-            
+
         }
         if (userIndex > -1 && dataConsumers.get(users[userIndex].name)) {
             dataConsumers.delete(users[userIndex].name);
             console.log(`NAME : ${users[userIndex].name.toUpperCase()} DATA CONSUMER DELETED`);
-            
+
         }
         if (userIndex > -1) {
             for (const rooms of videoRooms) {
@@ -774,28 +797,28 @@ wss.on('request', (req) => {
                     console.log(`NAME : ${users[userIndex].name.toUpperCase()} LEFT ROOM : ${rooms[1].name}`);
                 }
             }
-            
+
         }
         users.splice(userIndex, 1);
     })
-    
-    
+
+
 })
 
 async function createWorker() {
-    
+
     worker = await mediasoup.createWorker({
         rtcMinPort: rtcMinPort,
         rtcMaxPort: rtcMaxPort
     });
-    
+
     console.log(`Worker PID : ${worker.pid}`);
-    
+
     worker.on('died', () => {
         console.error('mediasoup worker died, exiting in 2 seconds...');
         setTimeout(() => process.exit(1), 2000);
     });
-    
+
     return worker;
 }
 
@@ -826,21 +849,21 @@ const createWebRtcTransport = async (data) => {
 
         const maxPorts = rtcMaxPort - rtcMinPort;
         if (tranportCounts >= maxPorts) {
-            
+
             console.log('max tranports reached');
             exec("pm2 restart index", (err, stdout, stderr) => {
                 if (err) console.error("Error restarting app:", err.message);
                 else console.log(stdout || stderr);
             });
-            
+
         }
         const transport = await router.createWebRtcTransport({
             listenIps: [
                 {
                     ip: '0.0.0.0',
-                    announcedIp: '127.0.0.1'
+                    announcedIp
                 },
-                
+
             ],
             enableTcp: true,
             enableUdp: true,
@@ -852,7 +875,7 @@ const createWebRtcTransport = async (data) => {
         });
         tranportCounts++;
         console.log(tranportCounts);
-        
+
         console.log(`Transport ID : ${transport.id}`);
 
         transport.on('dtlsstatechange', (dtlsState) => {

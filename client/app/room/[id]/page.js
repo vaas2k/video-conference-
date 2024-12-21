@@ -394,23 +394,6 @@ export default function Page({ params: param }) {
         }
 
     }
-    async function createDevice() {
-        try {
-
-            deviceRef.current = new Device();
-            await deviceRef.current.load({
-                routerRtpCapabilities: rtpCapabilities.current
-            })
-
-            console.log('RTP Capabilities', deviceRef.current)
-
-        } catch (error) {
-            console.log(error)
-            if (error.name === 'UnsupportedError')
-                console.warn('browser not supported')
-        }
-    }
-
     // VIDEO TRANSPORT
     async function createTransport(send, recv) {
         const req = await api.post('/transport-create', {
@@ -1155,7 +1138,7 @@ export default function Page({ params: param }) {
                 reverseOrder={false} />
             <div className="flex-1 flex flex-col bg-zinc-900">
                 {/* Header */}
-                <div className="flex items-centerp-4 bg-zinc-900 border-b-[1px] border-zinc-600 py-[15px] gap-x-[10px]">
+                <div className="flex items-center justify-between p-4 bg-zinc-900 border-b-[1px] border-zinc-600 py-[15px] gap-x-[10px]">
                     <h1 className="text-lg sm:text-2xl text-white font-bold">
                         Room ID: {roomID}
                     </h1>
@@ -1194,7 +1177,7 @@ export default function Page({ params: param }) {
                             <div className="absolute top-2 left-2 text-xs sm:text-sm text-white bg-black bg-opacity-60 px-2 py-1 sm:px-3 sm:py-1 rounded-lg">
                                 {producerName}
                             </div>
-                            <div className="absolute mt-[-45px] ml-[15px] flex space-x-2 z-10">
+                            <div className="absolute mt-[-45px] ml-[15px] flex space-x-2 z-2">
                                 <button
                                     onClick={() => handleRemoteVideoState(producerId, videoState)}
                                     className=" text-white p-2 rounded-full cursor-pointer"
@@ -1352,7 +1335,7 @@ export default function Page({ params: param }) {
                         <button onClick={() => setShowChat(!showChat)} className="text-sm px-2 py-1 bg-zinc-700 rounded hover:bg-zinc-950">Close</button>
                     </div>
                     {/* Chat Messages */}
-                    <div className="flex-1 p-4 overflow-y-auto space-y-4 bg-zinc-50">
+                    <div className="flex-1 p-4 overflow-y-auto space-y-4 bg-zinc-800">
                         {messages.length > 0 ? (
                             messages.map((data, index) => (
                                 <div
@@ -1369,16 +1352,16 @@ export default function Page({ params: param }) {
                         )}
                     </div>
                     {/* Message Input */}
-                    <div className="p-4 bg-white border-t border-gray-200 flex items-center space-x-3">
+                    <div className="p-4 bg-zinc-900 border-t border-gray-200 flex items-center space-x-3">
                         <input
                             name="message"
                             value={message}
-                            className="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            className="flex-1 border border-gray-300 rounded-lg px-3 bg-zinc-900 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                             onChange={(e) => setMessage(e.target.value)}
                             placeholder="Type a message..."
                         />
                         <button
-                            className="bg-zinc-900 text-white px-4 py-2 rounded-lg hover:bg-zinc-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            className="bg-zinc-900 text-white px-4 py-[5px] border-[1px] border-zinc-200 rounded-lg hover:bg-zinc-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
                             onClick={() => handleMessage(message)}
                         >
                             Send
