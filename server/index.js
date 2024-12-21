@@ -50,10 +50,12 @@ let dataProducerTransport, dataConsumerTransport;
 let dataProducer, dataConsumer;
 
 const consumerTransports = new Map();
+const producersTransports = new Map();
 const consumers = new Map();
 const producers = new Map();
 
 const audioConsumersTransports = new Map();
+const audioProducersTransports = new Map();
 const audioConsumers = new Map();
 const audioProducers = new Map();
 
@@ -75,7 +77,7 @@ app.post('/transport-create', async (req, res) => {
 
         if (send && !recv) {
             const { transport, params } = await createWebRtcTransport();
-            producerTransport = transport;
+            producersTransports.set(name,transport);
             return res.status(200).json({
                 event: 'createProducerTransport',
                 data: params
@@ -102,6 +104,7 @@ app.post('/transport-produce', async (req, res) => {
     const { kind, rtpParameters, appData, name } = req.body;
     try {
 
+        let producerTransport = producersTransports.get(name);
         producer = await producerTransport.produce({
             kind,
             rtpParameters,
@@ -242,7 +245,7 @@ app.post('/transport-create-audio', async (req, res) => {
     const { send, recv, name } = req.body;
     if (send && !recv) {
         const { transport, params } = await createWebRtcTransport();
-        audio_producerTransport = transport;
+        audioProducersTransports.set(name,transport);
         return res.status(200).json({
             event: 'createProducerTransport',
             data: params
@@ -263,6 +266,7 @@ app.post('/transport-produce-audio', async (req, res) => {
     const { kind, rtpParameters, appData, name } = req.body;
     try {
 
+        let audio_producerTransport = audioProducersTransports.get(name);
         audio_producer = await audio_producerTransport.produce({
             kind,
             rtpParameters,
@@ -587,7 +591,8 @@ wss.on('request', (req) => {
                 }
             }
             if (event === 'producer-connect') {
-                const dtlsParameters = data.dtlsParameters;
+                const {dtlsParameters,name} = data;
+                let producerTransport = producersTransports.get(name);
                 await producerTransport.connect({ dtlsParameters });
                 console.log("Producer Transport Connected");
             }
@@ -598,7 +603,8 @@ wss.on('request', (req) => {
                 console.log("Consumer Transport Connected");
             }
             if (event === 'producer-connect-audio') {
-                const dtlsParameters = data.dtlsParameters;
+                const {dtlsParameters,name} = data;
+                let audio_producerTransport = audioProducersTransports.get(name);
                 await audio_producerTransport.connect({ dtlsParameters });
                 console.log("Audio Producer Transport Connected");
             }
@@ -753,6 +759,8 @@ wss.on('request', (req) => {
         if (userIndex > -1 && producers.get(users[userIndex].name)) {
             const prod = producers.get(users[userIndex].name);
             prod.close();
+            
+            producersTransports.delete(users[userIndex].name);
             producers.delete(users[userIndex].name);
             console.log(`NAME : ${users[userIndex].name.toUpperCase()} VIDEO PRODUCER DELETED`);
 
@@ -769,6 +777,8 @@ wss.on('request', (req) => {
         if (userIndex > -1 && audioProducers.get(users[userIndex].name)) {
             const audioProd = audioProducers.get(users[userIndex].name);
             audioProd.close();
+        
+            audioProducersTransports.clear(users[userIndex].name);
             audioProducers.delete(users[userIndex].name);
             console.log(`NAME : ${users[userIndex].name.toUpperCase()} AUDIO PRODUCER DELETED`);
 

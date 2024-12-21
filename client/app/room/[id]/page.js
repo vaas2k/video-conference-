@@ -419,7 +419,8 @@ export default function Page({ params: param }) {
                         await socket.send(JSON.stringify({
                             event: 'producer-connect',
                             data: {
-                                dtlsParameters
+                                dtlsParameters,
+                                name:nameRef.current
                             }
                         }));
 
@@ -604,7 +605,7 @@ export default function Page({ params: param }) {
                             event: 'producer-connect-audio',
                             data: {
                                 dtlsParameters,
-
+                                name : nameRef.current
                             }
                         }));
 
@@ -1356,7 +1357,7 @@ export default function Page({ params: param }) {
                         <input
                             name="message"
                             value={message}
-                            className="flex-1 border border-gray-300 rounded-lg px-3 bg-zinc-900 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            className="flex-1 border border-gray-300 rounded-lg px-3 text-white bg-zinc-900 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                             onChange={(e) => setMessage(e.target.value)}
                             placeholder="Type a message..."
                         />
