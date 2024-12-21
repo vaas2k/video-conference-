@@ -5,6 +5,7 @@ import WebSocketServer from 'websocket';
 import fs from 'fs';
 import mediasoup from 'mediasoup';
 import cors from 'cors'
+import { exec } from 'child_process';
 
 const app = express();
 const options = {
@@ -32,6 +33,9 @@ app.get('/', (req, res) => res.send('Hello Nigga'));
 
 
 // GLOBAL VARIABLES
+let tranportCounts = 0;
+let rtcMinPort = 2000;
+let rtcMaxPort = 2020;
 
 const users = [];
 let worker, router;
@@ -44,9 +48,11 @@ let audio_producer, audio_consumer;
 let dataProducerTransport, dataConsumerTransport;
 let dataProducer, dataConsumer;
 
+const consumerTransports = new Map();
 const consumers = new Map();
 const producers = new Map();
 
+const audioConsumersTransports = new Map();
 const audioConsumers = new Map();
 const audioProducers = new Map();
 
@@ -54,11 +60,16 @@ const dataConsumers = new Map();
 const dataProducers = new Map();
 
 
+const videoRooms = new Map();
+
+
+
+
 // API ROUTES
 
 app.post('/transport-create', async (req, res) => {
 
-    const { send, recv } = req.body;
+    const { send, recv, name } = req.body;
     try {
 
         if (send && !recv) {
@@ -72,7 +83,7 @@ app.post('/transport-create', async (req, res) => {
         }
         else if (recv && !send) {
             const { transport, params } = await createWebRtcTransport();
-            consumerTransport = transport;
+            consumerTransports.set(name, transport);
             return res.status(200).json({
                 event: 'createConsumerTransport',
                 data: params
@@ -82,7 +93,7 @@ app.post('/transport-create', async (req, res) => {
         console.log(error);
     }
 });
-app.get('/rtpCapabilities', (req, res) => {
+app.get('/rtpCapabilities', async (req, res) => {
     const rtpCapabilities = router.rtpCapabilities;
     return res.status(200).json({ rtpCapabilities: rtpCapabilities });
 })
@@ -98,7 +109,8 @@ app.post('/transport-produce', async (req, res) => {
         console.log('Producer ID: ', producer.id, producer.kind)
 
         producer.on('transportclose', () => {
-            console.log('transport for this producer closed ')
+            tranportCounts--;
+            console.log('VIDEO PRODUCER TRANSPORT CLOSED');
             producer.close()
         })
 
@@ -116,19 +128,21 @@ app.post('/transport-consume', async (req, res) => {
     try {
 
 
-        const { rtpCapabilities, name } = req.body;
+        const { rtpCapabilities, name, roomID } = req.body;
         const consumerName = name;
+        const consumerTransport = consumerTransports.get(name);
+        // console.log(consumerTransport);
 
-        console.log(consumerName);
+        const room = videoRooms.get(roomID);
+        // console.log(room);
 
-        if (!producer) { return res.status(404).json({ error: 'No Producer Found' }) };
+        let producers_to_returns = [];
 
-        let audio_producers_to_returns = [];
+        for (const streamer of room) {
 
-        for (const streamer of producers) {
-
-            const producerName = streamer[0];
-            const producer = streamer[1];
+            const producerName = streamer.name;
+            const producer = streamer.producer;
+            console.log(producerName);
 
             // would skip their own stream;
             if (producerName === consumerName) continue;
@@ -144,10 +158,11 @@ app.post('/transport-consume', async (req, res) => {
                 });
 
                 consumer.on('transportclose', () => {
-                    console.log('transport close from consumer')
+                    console.log('VIDEO CONSUMER TRANSPORT CLOSED')
+                    tranportCounts--;
                 });
                 consumer.on('producerclose', () => {
-                    console.log('producer of consumer closed')
+                    console.log('VIDEO CONSUMER -> [one of the producer closed]')
                 });
 
                 const params = {
@@ -168,7 +183,7 @@ app.post('/transport-consume', async (req, res) => {
                 }
 
 
-                audio_producers_to_returns.push(params);
+                producers_to_returns.push(params);
             }
             else {
                 console.log("CANT CONSUME");
@@ -181,7 +196,7 @@ app.post('/transport-consume', async (req, res) => {
             console.log(`CONSUMERNAME : ${cons[0]} , PRODUCER NAME : ${cons[1][0].producerName}`);
         }
 
-        return res.status(200).json({ params: audio_producers_to_returns });
+        return res.status(200).json({ params: producers_to_returns });
 
         // console.log(`Producer ID : ${producer.id}`)
         // if (router.canConsume({ rtpCapabilities, producerId: producer.id })) {
@@ -223,7 +238,7 @@ app.post('/transport-consume', async (req, res) => {
 
 app.post('/transport-create-audio', async (req, res) => {
 
-    const { send, recv } = req.body;
+    const { send, recv, name } = req.body;
     if (send && !recv) {
         const { transport, params } = await createWebRtcTransport();
         audio_producerTransport = transport;
@@ -235,7 +250,7 @@ app.post('/transport-create-audio', async (req, res) => {
     }
     else if (recv && !send) {
         const { transport, params } = await createWebRtcTransport();
-        audio_consumerTransport = transport;
+        audioConsumersTransports.set(name, transport);
         return res.status(200).json({
             event: 'createConsumerTransport',
             data: params
@@ -255,7 +270,8 @@ app.post('/transport-produce-audio', async (req, res) => {
         console.log('Audio Producer ID: ', audio_producer.id, audio_producer.kind)
 
         audio_producer.on('transportclose', () => {
-            console.log('transport for this producer closed ')
+            console.log('AUDIO PRODUCER TRANSPORT CLOSED');
+            tranportCounts--;
             audio_producer.close()
         })
 
@@ -271,19 +287,19 @@ app.post('/transport-produce-audio', async (req, res) => {
 app.post('/transport-consume-audio', async (req, res) => {
     try {
 
-        const { rtpCapabilities, name } = req.body;
+        const { rtpCapabilities, name, roomID } = req.body;
         const consumerName = name;
+        const audio_consumerTransport = audioConsumersTransports.get(name);
 
-        console.log(consumerName);
-
-        if (!audio_producer) { return res.status(404).json({ error: 'No Producer Found' }) };
+        const room = videoRooms.get(roomID);
+        // console.log(consumerName);
 
         let audio_producers_to_returns = [];
 
-        for (const streamer of audioProducers) {
+        for (const streamer of room) {
 
-            const producerName = streamer[0];
-            const producer = streamer[1];
+            const producerName = streamer.name;
+            const producer = streamer.audio_producer;
 
             // would skip their own stream;
             if (producerName === consumerName) continue;
@@ -299,10 +315,11 @@ app.post('/transport-consume-audio', async (req, res) => {
                 });
 
                 audio_consumer.on('transportclose', () => {
-                    console.log('transport close from consumer')
+                    tranportCounts--;
+                    console.log('AUDIO CONSUMER TRANSPORT CLOSED')
                 });
                 audio_consumer.on('producerclose', () => {
-                    console.log('producer of consumer closed')
+                    console.log('AUDIO CONSUMER -> [one of the producer closed] ')
                 });
 
                 const params = {
@@ -388,14 +405,14 @@ app.post('/data-produce', async (req, res, next) => {
 })
 app.post('/data-consume', async (req, res, next) => {
     try {
-        const { name } = req.body;
+        const { name, roomID } = req.body;
 
 
-
+        const room = videoRooms.get(roomID);
         let all_producers = [];
-        for (const producer of dataProducers) {
-            const producerName = producer[0];
-            const dataProducer = producer[1];
+        for (const producer of room) {
+            const producerName = producer.name;
+            const dataProducer = producer.dataProducer;
 
             if (name == producerName) continue;
 
@@ -406,7 +423,7 @@ app.post('/data-consume', async (req, res, next) => {
             dataConsumer.on('transportclose', () => { console.log("Data Consumer Transport Closed") });
             dataConsumer.on('producerclose', () => { console.log("Data Producer Closed") });
 
-            console.log(dataConsumer);
+            // console.log(dataConsumer);
 
             const params = {
                 id: dataConsumer.id,
@@ -431,6 +448,8 @@ app.post('/data-consume', async (req, res, next) => {
 
     } catch (error) {
         console.log(error);
+    } finally {
+
     }
 })
 
@@ -445,12 +464,97 @@ wss.on('request', (req) => {
             const { event, data } = JSON.parse(message.utf8Data);
             console.log(event, data);
 
-            if (event === 'name') {
-                const name = data.name;
-                users.push({ socket, name });
-                for (const user of users) {
-                    console.log(user.name);
+            if (event === 'join') {
+                const { roomID, name } = data;
+                const userIndex = users.findIndex(user => user.name === name);
+                const prev = users[userIndex];
+                users[userIndex] = { ...prev, roomID: roomID };
+
+                if (!videoRooms.has(roomID)) {
+                    const producer = producers.get(name);
+                    const audio_producer = audioProducers.get(name);
+                    const dataProducer = dataProducers.get(name);
+                    videoRooms.set(roomID, [{ socket, name, producer, audio_producer, dataProducer }]);
+                    console.log(`ROOM CREATED ${roomID}`)
                 }
+                else {
+
+                    // need a queue for the FIFO Job for consumers;
+                    const producer = producers.get(name);
+                    const audio_producer = audioProducers.get(name);
+                    const dataProducer = dataProducers.get(name);
+                    videoRooms.get(roomID).push({ socket, name, producer, audio_producer, dataProducer });
+                    console.log(`ROOM JOINED ${roomID} - USER : ${name}`);
+                    const room = videoRooms.get(roomID);
+                    for (const user of room) {
+                        user.socket.send(JSON.stringify({
+                            event: 'NEW-USER-JOINED-ROOM'
+                        }))
+                    }
+                }
+
+            }
+
+            if (event === 'room-exist') {
+                const { roomID } = data;
+                socket.send(JSON.stringify({
+                    event: 'room-exist',
+                    data: {
+                        room_exist: videoRooms.has(roomID) ? true : false
+                    }
+                }))
+            }
+            if (event === 'group-message') {
+                const { from, message, roomID } = data;
+                for (const user of videoRooms.get(roomID)) {
+                    if (user.name === from) continue;
+                    user.socket.send(JSON.stringify({
+                        event: 'group-message',
+                        data: {
+                            from,
+                            message
+                        }
+                    }))
+                }
+            }
+
+            if (event === 'get-participants') {
+                const { roomID } = data;
+                const room = videoRooms.get(roomID);
+                let participants = [];
+                for (const user of room) {
+                    participants.push({
+                        name: user.name
+                    });
+                }
+
+                socket.send(JSON.stringify({
+                    event: 'get-participants',
+                    data: participants
+                }))
+            };
+
+            if (event === 'name') {
+
+                if(tranportCounts >= rtcMaxPort - rtcMinPort - 1) {
+                    console.log('UDP TRANSPORT PORTS -> ',tranportCounts)
+                    socket.send(JSON.stringify({
+                        event : 'max-users'
+                    }));
+                    return;
+                }
+
+                const name = data.name;
+                const userIndex = users.findIndex(user => user.socket == socket);
+                if (userIndex > -1) {
+                    users[userIndex].name = name;
+                }
+                else {
+                    users.push({ socket, name });
+                }
+                // for (const user of users) {
+                //     console.log(user.name);
+                // }
 
             }
             if (event === 'getRtpCapabilities') {
@@ -461,7 +565,7 @@ wss.on('request', (req) => {
                 }));
             }
             if (event === 'createTransport') {
-                const { send, recv } = data;
+                const { send, recv, name } = data;
                 if (send && !recv) {
                     const { transport, params } = await createWebRtcTransport();
                     producerTransport = transport;
@@ -472,7 +576,9 @@ wss.on('request', (req) => {
                 }
                 else if (recv && !send) {
                     const { transport, params } = await createWebRtcTransport();
-                    consumerTransport = transport;
+                    // consumerTransport = transport;
+                    // storing the transport
+
                     socket.send(JSON.stringify({
                         event: 'createConsumerTransport',
                         data: params
@@ -485,7 +591,8 @@ wss.on('request', (req) => {
                 console.log("Producer Transport Connected");
             }
             if (event === 'consumer-connect') {
-                const dtlsParameters = data.dtlsParameters;
+                const { dtlsParameters, name } = data;
+                const consumerTransport = consumerTransports.get(name);
                 await consumerTransport.connect({ dtlsParameters });
                 console.log("Consumer Transport Connected");
             }
@@ -495,7 +602,8 @@ wss.on('request', (req) => {
                 console.log("Audio Producer Transport Connected");
             }
             if (event === 'consumer-connect-audio') {
-                const dtlsParameters = data.dtlsParameters;
+                const { dtlsParameters, name } = data;
+                const audio_consumerTransport = audioConsumersTransports.get(name)
                 await audio_consumerTransport.connect({ dtlsParameters });
                 console.log("Audio Consumer Transport Connected");
             }
@@ -561,22 +669,31 @@ wss.on('request', (req) => {
                 }
             }
             if (event === 'pause-producer') {
-                const name = data.name;
-                const producer = producers.get(name);
-                const audioProducer = audioProducers.get(name);
-                await producer.pause();
-                await audioProducer.pause();
-                console.log(`PRODUCER RESUME : ${name}`);
+                const { name, video, audio } = data;
+                if (video) {
+                    const producer = producers.get(name);
+                    await producer.pause();
+                    console.log(`PAUSE VIDEO  : ${name}`);
+                }
+                if (audio) {
+                    const audioProducer = audioProducers.get(name);
+                    await audioProducer.pause();
+                    console.log(`PAUSE AUDIO : ${name}`);
+                }
             }
             if (event === 'resume-producer') {
-                const name = data.name;
-                const producer = producers.get(name);
-                const audioProducer = audioProducers.get(name);
-                await producer.resume();
-                await audioProducer.resume();
-                console.log(`PRODUCER RESUME : ${name}`);
+                const { name, video, audio } = data;
+                if (video) {
+                    const producer = producers.get(name);
+                    await producer.resume();
+                    console.log(`PRODUCER VIDEO RESUME : ${name}`);
+                }
+                if (audio) {
+                    const audioProducer = audioProducers.get(name);
+                    await audioProducer.resume();
+                    console.log(`PRODUCER AUDIO RESUME : ${name}`);
+                }
             }
-
             if (event === 'resume-data-consumer') {
                 const name = data.name;
                 const dataProducerId = data.dataProducerId;
@@ -587,16 +704,12 @@ wss.on('request', (req) => {
                     }
                 }
             }
-
-
             if (event === 'connect-data-producer-transport') {
                 const dtlsParameters = data.dtlsParameters;
-                console.log('dtls Parameters recieved');
                 await dataProducerTransport.connect({ dtlsParameters });
             }
             if (event === 'connect-data-consumer-transport') {
                 const dtlsParameters = data.dtlsParameters;
-                console.log('dtls Parameters recieved');
                 await dataConsumerTransport.connect({ dtlsParameters });
             }
         }
@@ -605,54 +718,84 @@ wss.on('request', (req) => {
     socket.on('close', () => {
         console.log('USER DISCONNECTED');
         const userIndex = users.findIndex(user => user.socket == socket);
+        if (userIndex > -1 && users[userIndex].roomID) {
+            for (const room of videoRooms.get(users[userIndex].roomID)) {
+                if (users[userIndex].name === room.name) continue;
+                room.socket.send(JSON.stringify({
+                    event: "USER-LEFT-ROOM"
+                }))
+            }
+        }
 
         if (userIndex > -1 && producers.get(users[userIndex].name)) {
+            const prod = producers.get(users[userIndex].name);
+            prod.close();
             producers.delete(users[userIndex].name);
             console.log(`NAME : ${users[userIndex].name.toUpperCase()} VIDEO PRODUCER DELETED`);
+            
         }
         if (userIndex > -1 && consumers.get(users[userIndex].name)) {
+            for (const cons of consumers.get(users[userIndex].name)) { cons.consumer.close(); }
+            consumerTransports.get(users[userIndex].name).close();
+
             consumers.delete(users[userIndex].name);
             console.log(`NAME : ${users[userIndex].name.toUpperCase()} VIDEO CONSUMER DELETED`);
+            
         }
 
         if (userIndex > -1 && audioProducers.get(users[userIndex].name)) {
+            const audioProd = audioProducers.get(users[userIndex].name);
+            audioProd.close();
             audioProducers.delete(users[userIndex].name);
             console.log(`NAME : ${users[userIndex].name.toUpperCase()} AUDIO PRODUCER DELETED`);
+            
         }
         if (userIndex > -1 && audioConsumers.get(users[userIndex].name)) {
+            for (const cons of audioConsumers.get(users[userIndex].name)) { cons.audio_consumer.close(); }
+            audioConsumersTransports.get(users[userIndex].name).close();
             audioConsumers.delete(users[userIndex].name);
             console.log(`NAME : ${users[userIndex].name.toUpperCase()} AUDIO CONSUMER DELETED`);
+            
         }
-
         if (userIndex > -1 && dataProducers.get(users[userIndex].name)) {
             dataProducers.delete(users[userIndex].name);
             console.log(`NAME : ${users[userIndex].name.toUpperCase()} DATA PRODUCER DELETED`);
+            
         }
         if (userIndex > -1 && dataConsumers.get(users[userIndex].name)) {
             dataConsumers.delete(users[userIndex].name);
             console.log(`NAME : ${users[userIndex].name.toUpperCase()} DATA CONSUMER DELETED`);
+            
         }
-
+        if (userIndex > -1) {
+            for (const rooms of videoRooms) {
+                if (users[userIndex].name === rooms[1].name) {
+                    rooms[1].delete(users[userIndex].name);
+                    console.log(`NAME : ${users[userIndex].name.toUpperCase()} LEFT ROOM : ${rooms[1].name}`);
+                }
+            }
+            
+        }
         users.splice(userIndex, 1);
-
     })
-
+    
+    
 })
 
 async function createWorker() {
-
+    
     worker = await mediasoup.createWorker({
-        rtcMinPort: 2000,
-        rtcMaxPort: 2020,
+        rtcMinPort: rtcMinPort,
+        rtcMaxPort: rtcMaxPort
     });
-
+    
     console.log(`Worker PID : ${worker.pid}`);
-
+    
     worker.on('died', () => {
         console.error('mediasoup worker died, exiting in 2 seconds...');
         setTimeout(() => process.exit(1), 2000);
     });
-
+    
     return worker;
 }
 
@@ -681,12 +824,23 @@ const createWebRtcTransport = async (data) => {
 
     try {
 
+        const maxPorts = rtcMaxPort - rtcMinPort;
+        if (tranportCounts >= maxPorts) {
+            
+            console.log('max tranports reached');
+            exec("pm2 restart index", (err, stdout, stderr) => {
+                if (err) console.error("Error restarting app:", err.message);
+                else console.log(stdout || stderr);
+            });
+            
+        }
         const transport = await router.createWebRtcTransport({
             listenIps: [
                 {
                     ip: '0.0.0.0',
-                    announcedIp: '127.0.0.1',
+                    announcedIp: '127.0.0.1'
                 },
+                
             ],
             enableTcp: true,
             enableUdp: true,
@@ -696,7 +850,9 @@ const createWebRtcTransport = async (data) => {
                 numStreams: { OS: 1024, MIS: 1024 },
             },
         });
-
+        tranportCounts++;
+        console.log(tranportCounts);
+        
         console.log(`Transport ID : ${transport.id}`);
 
         transport.on('dtlsstatechange', (dtlsState) => {
@@ -719,3 +875,8 @@ const createWebRtcTransport = async (data) => {
         console.log(error);
     }
 }
+
+
+
+
+

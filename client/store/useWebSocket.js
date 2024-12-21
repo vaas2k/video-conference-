@@ -15,7 +15,6 @@ const useWebSocket = create((set, get) => ({
             ws.onopen = () => {
                 console.log("WebSocket Connected");
                 socketID = uuidv4();                
-                console.log(socketID);
                 ws.send(JSON.stringify({
                     event : "connect",
                     data : {
