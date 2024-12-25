@@ -420,7 +420,7 @@ export default function Page({ params: param }) {
                             event: 'producer-connect',
                             data: {
                                 dtlsParameters,
-                                name:nameRef.current
+                                name: nameRef.current
                             }
                         }));
 
@@ -605,7 +605,7 @@ export default function Page({ params: param }) {
                             event: 'producer-connect-audio',
                             data: {
                                 dtlsParameters,
-                                name : nameRef.current
+                                name: nameRef.current
                             }
                         }));
 
@@ -1159,7 +1159,9 @@ export default function Page({ params: param }) {
                             ref={videoRef}
                             autoPlay
                             muted
-                            className={`w-full h-[200px] sm:w-[400px] sm:h-[250px] ${!ownVideoState ? "opacity-[10%]" : "opacity-[100%]"}  object-cover rounded-lg shadow-sm`}
+                            style={{ transform: 'scaleX(-1)' }}
+                            className={`w-full h-[200px] sm:w-[400px] sm:h-[250px] ${!ownVideoState ? "opacity-[10%]" : "opacity-[100%]"
+                                } object-cover rounded-lg shadow-sm`}
                         />
                         <div className="absolute top-2 left-2 text-xs sm:text-sm text-white bg-black bg-opacity-60 px-2 py-1 sm:px-3 sm:py-1 rounded-lg">
                             You
@@ -1173,6 +1175,7 @@ export default function Page({ params: param }) {
                                     if (el && !el.srcObject) el.srcObject = stream;
                                 }}
                                 autoPlay
+                                style={{ transform: 'scaleX(-1)' }} 
                                 className="w-full h-[200px] sm:w-[400px] sm:h-[250px] object-cover rounded-lg shadow-md"
                             />
                             <div className="absolute top-2 left-2 text-xs sm:text-sm text-white bg-black bg-opacity-60 px-2 py-1 sm:px-3 sm:py-1 rounded-lg">

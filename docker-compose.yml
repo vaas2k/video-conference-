@@ -1,0 +1,14 @@
+version: "3"
+services:
+  linux:
+    container_name: "ubuntu-container"
+    image: "ubuntu"
+    restart: "always"
+    tty: true
+    ports:
+      - "8000:8000"	
+      - "3000:3000"
+      - "2000-2020:2000-2020"
+    # - "10000-10100:10000-10100" 
+    volumes:
+      - "./mediasoup/src:/usr/src"
