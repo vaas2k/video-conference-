@@ -2,20 +2,18 @@
 
 ## Developer / Author / Engineer: Salman Ahmed Khan
 
-## TO RUN THE CODE/PROJECT
+## To Run the Code/Project
 
-clone the project
-run the Docker File to build an image
-run the docker compose file to start the container
+1. Clone the project.  
+2. Run the Dockerfile to build an image.  
+3. Run the Docker Compose file to start the container.  
+4. Open the container using the **Dev Container** extension in VS Code or through a bash terminal.  
+5. Clone the project again inside the container.  
+6. Finally, run the following commands in both the client and server directories:  
+   - `npm install`  
+   - `npm run build` (only for the client)  
+   - `npm start`  
 
-open that container using Dev Container extension in vs code or using bash terminal
-
-clone the project again inside the container
-
-finally run these commands both in client and server
-npm install 
-npm run build (only client)
-npm start  
 
 
 ## Introduction
