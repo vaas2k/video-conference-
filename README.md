@@ -1,3 +1,5 @@
+
+(CODE IS NOT PROPERLY STRUCTERED AS THIS WAS FOR LEARNING ONLY BUT ENDED UP AS PROJECT)
 # Video Conferencing Application
 
 ## Developer / Author / Engineer: Salman Ahmed Khan
